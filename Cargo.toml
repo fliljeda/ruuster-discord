@@ -1,0 +1,7 @@
+[package]
+name = "ruuster-discord"
+version = "0.1.0"
+authors = ["Frallan"]
+edition = "2018"
+
+[dependencies]
