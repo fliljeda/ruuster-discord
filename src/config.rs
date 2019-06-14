@@ -44,6 +44,7 @@ fn handle_flags(flags: Vec<Flag>, settings: &mut Settings) {
     }
 }
 
+// Maps the key to a variable in the settings struct and sets its value to val
 fn add_config_option(settings: &mut Settings, key: &str, val: &str) {
     match key {
         "client" => {
@@ -65,6 +66,7 @@ fn add_config_option(settings: &mut Settings, key: &str, val: &str) {
     };
 }
 
+// Parses file from path and sets the configuartions based on the file contents
 fn parse_config_file(path: &str, settings: &mut Settings){
     let contents = fs::read_to_string(path)
         .expect("Could not read the file");
@@ -82,8 +84,8 @@ fn parse_config_file(path: &str, settings: &mut Settings){
 
 // Outputs prompt to stdout and reads line from stdin and returns as trimmed String
 fn prompt_value(prompt: &str) -> String {
-    // print immediately
     { 
+        // print immediately
         use std::io::Write;
         print!("{}", prompt);
         io::stdout().flush().unwrap();
@@ -102,14 +104,14 @@ fn prompt_value(prompt: &str) -> String {
 // Prompts selected values from stdin if not entered
 fn handle_missing_configvals(settings: &mut Settings) {
     // Vec defining prompts and value handles for when None
-    let config_handles: Vec<(String,&mut Option<String>)> = vec![
+    let prompt_handles: Vec<(String,&mut Option<String>)> = vec![
         (String::from("Client id: "), &mut settings.client),
         (String::from("Guild id: "), &mut settings.guild),
         (String::from("Secret: "), &mut settings.secret),
         (String::from("Token: "), &mut settings.token),
     ];
     
-    for tup in config_handles {
+    for tup in prompt_handles {
         let prompt = tup.0;
         let val = tup.1;
         *val = match val {
