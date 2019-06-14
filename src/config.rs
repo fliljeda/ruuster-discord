@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+use std::io;
 
 #[derive(Debug)]
 enum Flag{
@@ -79,6 +80,45 @@ fn parse_config_file(path: &str, settings: &mut Settings){
     }
 }
 
+// Outputs prompt to stdout and reads line from stdin and returns as trimmed String
+fn prompt_value(prompt: &str) -> String {
+    // print immediately
+    { 
+        use std::io::Write;
+        print!("{}", prompt);
+        io::stdout().flush().unwrap();
+    }
+
+    // read input 
+    let mut inp = String::new();
+    io::stdin().read_line(&mut inp)
+        .expect("Failed to read input");
+
+    // return trimmed string
+    String::from(inp.trim())
+}
+
+// Checks if certain values in the settings struct is set or not
+// Prompts selected values from stdin if not entered
+fn handle_missing_configvals(settings: &mut Settings) {
+    // Vec defining prompts and value handles for when None
+    let config_handles: Vec<(String,&mut Option<String>)> = vec![
+        (String::from("Client id: "), &mut settings.client),
+        (String::from("Guild id: "), &mut settings.guild),
+        (String::from("Secret: "), &mut settings.secret),
+        (String::from("Token: "), &mut settings.token),
+    ];
+    
+    for tup in config_handles {
+        let prompt = tup.0;
+        let val = tup.1;
+        *val = match val {
+            Some(_) => continue,
+            None => Some(prompt_value(&prompt)),
+        }
+    }
+
+}
 
 // Creates and returns a settings object from where details about runtime specifics
 // can be fetched
@@ -91,5 +131,6 @@ pub fn get_settings() -> Settings {
     };
 
     handle_arguments(&mut settings);
+    handle_missing_configvals(&mut settings);
     settings
 }
