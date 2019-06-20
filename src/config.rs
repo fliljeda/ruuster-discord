@@ -9,10 +9,10 @@ enum Flag{
 
 #[derive(Debug)]
 pub struct Settings{
-    client: Option<String>,
-    guild: Option<String>,
-    secret: Option<String>,
-    token: Option<String>,
+    pub client: Option<String>,
+    pub guild: Option<String>,
+    pub secret: Option<String>,
+    pub token: Option<String>,
 }
 
 //Extracts command line arguments
