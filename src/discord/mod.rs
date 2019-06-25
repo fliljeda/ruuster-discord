@@ -1,5 +1,45 @@
 use super::config::Settings;
 use reqwest::{Client, Url};
+use serde::{Deserialize};
+use std::fmt;
+
+const API_BASE_URL: &str = "https://discordapp.com/api/";
+
+#[derive(Deserialize)]
+enum ChannelType {
+    Text = 0,
+    _DM = 1,
+    Voice = 2,
+    _GroupDM = 3,
+    _GuildCategory = 4,
+    _GuildNews = 5,
+    _GuildStore = 6,
+}
+
+#[derive(Deserialize)]
+struct Channel{
+    #[serde(alias = "type")]
+    ctype: ChannelType,
+    name: String,
+}
+
+
+impl fmt::Display for ChannelType {
+    fn fmt(&self, f : &mut fmt::Formatter) -> fmt::Result {
+        let text = match self {
+            ChannelType::Text => "Text",
+            ChannelType::Voice => "Voice",
+            _ => "Not text/voice",
+        };
+        write!(f, "{}", text)
+    }
+}
+
+impl fmt::Display for Channel {
+    fn fmt(&self, f : &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Channel(type=\"{}\" name=\"{}\")", self.ctype, self.name)
+    }
+}
 
 pub fn test_connection(settings: &Settings) -> Result<(), reqwest::Error>{
     println!("Client: {:?}", settings.client);
@@ -44,6 +84,24 @@ fn build_client(settings: &Settings) -> Result<Client, reqwest::Error> {
     Ok(client)
 }
 
+
+fn get_channels(client: &Client, guild: &str) -> Vec<Channel> {
+    let url = Url::parse(&format!("{}guilds/{}/channels", 
+                                 API_BASE_URL, 
+                                 guild)).unwrap();
+
+    println!("{:?}", url);
+    let mut resp = client.get(url).send().unwrap();
+    let body = resp.text().unwrap();
+    //println!("{}", body);
+    let v : Vec<Channel> = match serde_json::from_str(&body) {
+        Err(e) => panic!(e),
+        Ok(a) => a,
+    };
+    v
+}
+
+
 // Starts the bot using Bot Token Authorization Header
 // https://discordapp.com/developers/docs/reference#authentication
 pub fn start_bot(settings: &Settings) {
@@ -53,20 +111,5 @@ pub fn start_bot(settings: &Settings) {
         Ok(c) => c,
         Err(e) => panic!(e),
     };
-
-
-    //TODO fix error handling
-    // TODO refactor to functions
-    let api_base_url = "https://discordapp.com/api/";
-    let guild = &settings.guild;
-    let url = Url::parse(&format!("{}guilds/{}/channels", 
-                                 api_base_url, 
-                                 guild)).unwrap();
-
-    println!("{:?}", url);
-    let mut resp = client.get(url).send().unwrap();
-    let body = resp.text().unwrap();
-    println!("{}", body);
-
-
+    get_channels(&client, &settings.guild);
 }
