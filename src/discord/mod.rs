@@ -2,19 +2,15 @@ use super::config::Settings;
 use reqwest::{Client, Url};
 
 pub fn test_connection(settings: &Settings) -> Result<(), reqwest::Error>{
-    println!("Client: {:?}", settings.client.as_ref());
+    println!("Client: {:?}", settings.client);
     reqwest::get("https://httpbin.org/get")?;
     Ok(())
 }
 
 // TODO: Tests config values' validity for the discord API
-fn settings_valid(settings: &Settings) -> bool {
-    match settings.client {
-        Some(_) => true,
-        None => false,
-    }
+fn settings_valid(_settings: &Settings) -> bool {
+    true
 }
-
 
 // Creates a headervalue struct from a string value
 fn get_as_header(val: &str) -> reqwest::header::HeaderValue {
@@ -30,7 +26,7 @@ fn gen_default_headers(settings: &Settings) -> reqwest::header::HeaderMap {
 
     // TODO refactor to functions
     let mut auth = String::from("Bot ");
-    auth.push_str(settings.token.as_ref().unwrap());
+    auth.push_str(settings.token.as_ref());
     let auth_val = get_as_header(&auth);
 
     headers.insert(header::AUTHORIZATION, auth_val);
@@ -52,7 +48,7 @@ fn build_client(settings: &Settings) -> Result<Client, reqwest::Error> {
 // https://discordapp.com/developers/docs/reference#authentication
 pub fn start_bot(settings: &Settings) {
     assert!(settings_valid(settings));
-    println!("{}", settings.client.as_ref().unwrap());
+    println!("{}", &settings.client);
     let client = match build_client(&settings) {
         Ok(c) => c,
         Err(e) => panic!(e),
@@ -62,7 +58,7 @@ pub fn start_bot(settings: &Settings) {
     //TODO fix error handling
     // TODO refactor to functions
     let api_base_url = "https://discordapp.com/api/";
-    let guild = settings.guild.as_ref().unwrap();
+    let guild = &settings.guild;
     let url = Url::parse(&format!("{}guilds/{}/channels", 
                                  api_base_url, 
                                  guild)).unwrap();
