@@ -5,39 +5,62 @@ use std::fmt;
 
 const API_BASE_URL: &str = "https://discordapp.com/api/";
 
-#[derive(Deserialize)]
 enum ChannelType {
     Text = 0,
-    _DM = 1,
+    DM = 1,
     Voice = 2,
-    _GroupDM = 3,
-    _GuildCategory = 4,
-    _GuildNews = 5,
-    _GuildStore = 6,
+    GroupDM = 3,
+    GuildCategory = 4,
+    GuildNews = 5,
+    GuildStore = 6,
+    Unknown,
 }
 
+// Channel fields directly corresponds to a subset of the Discord api
+// channel response json
 #[derive(Deserialize)]
 struct Channel{
     #[serde(alias = "type")]
-    ctype: ChannelType,
+    ctype: u8,
+    id: String,
     name: String,
 }
 
+impl ChannelType {
+    fn from_u8(u :u8) -> ChannelType {
+        match u {
+            0 => ChannelType::Text,
+            1 => ChannelType::DM,
+            2 => ChannelType::Voice,
+            3 => ChannelType::GroupDM,
+            4 => ChannelType::GuildCategory,
+            5 => ChannelType::GuildNews,
+            6 => ChannelType::GuildStore,
+            _ => ChannelType::Unknown,
+        }
+    }
+}
 
 impl fmt::Display for ChannelType {
     fn fmt(&self, f : &mut fmt::Formatter) -> fmt::Result {
         let text = match self {
             ChannelType::Text => "Text",
             ChannelType::Voice => "Voice",
+            ChannelType::Unknown => "Unknown",
             _ => "Not text/voice",
         };
         write!(f, "{}", text)
     }
 }
 
+impl Channel {
+    fn get_channel_type(&self) -> ChannelType {
+        ChannelType::from_u8(self.ctype)
+    }
+}
 impl fmt::Display for Channel {
     fn fmt(&self, f : &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Channel(type=\"{}\" name=\"{}\")", self.ctype, self.name)
+        write!(f, "Channel(type=\"{}\" name=\"{}\")", self.get_channel_type(), self.name)
     }
 }
 
@@ -111,5 +134,7 @@ pub fn start_bot(settings: &Settings) {
         Ok(c) => c,
         Err(e) => panic!(e),
     };
-    get_channels(&client, &settings.guild);
+    for x in get_channels(&client, &settings.guild) {
+        println!("{}", x);
+    }
 }
