@@ -1,3 +1,4 @@
+mod gateway;
 use super::config::Settings;
 use reqwest::{Client, Url};
 use serde::{Deserialize};
@@ -185,6 +186,11 @@ pub fn start_bot(settings: &Settings) {
         Ok(c) => c,
         Err(e) => panic!(e),
     };
+    let b = gateway::get_gateway(&client);
+    if b {
+        return;
+    }
+
     let mut v = get_text_channels(&client, &settings.guild);
 
     loop {
