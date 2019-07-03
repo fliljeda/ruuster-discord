@@ -186,7 +186,7 @@ pub fn start_bot(settings: &Settings) {
         Ok(c) => c,
         Err(e) => panic!(e),
     };
-    let b = gateway::get_gateway(&client);
+    let b = gateway::initiate_gateway(&client);
     if b {
         return;
     }

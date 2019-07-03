@@ -1,6 +1,6 @@
 use reqwest::{Client, Url};
-use super::*;
-//use serde::{Deserialize};
+use super::API_BASE_URL;
+use serde::{Deserialize};
 //use std::fmt;
 
 
@@ -46,7 +46,7 @@ fn deserialize<'a, T: Deserialize<'a>>(body: &'a str) -> T {
     v
 }
 
-pub fn get_gateway(client: &Client) -> bool{
+pub fn initiate_gateway(client: &Client) -> bool{
     let url = &format!("{}gateway/bot", API_BASE_URL);
     let body = send_get(client, url);
     let v : GatewayResponse = deserialize(&body);
