@@ -1,6 +1,7 @@
 mod config;
 mod discord;
 extern crate reqwest;
+extern crate websocket;
 
 fn main() {
     let settings = config::get_settings();
