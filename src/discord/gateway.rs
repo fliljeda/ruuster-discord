@@ -78,8 +78,8 @@ impl<'de> Deserialize<'de> for GatewayPayload {
                         Err(e) => Err(e),
                     }
                 }
-                _ => {
-                    panic!("Unknown discord gateway payload opcode");
+                x => {
+                    panic!("Unknown discord gateway payload opcode {}", x);
                 },
             };
 
