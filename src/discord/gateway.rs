@@ -29,32 +29,63 @@ struct GatewaySessionStartLimit {
     pub reset_after: u32,
 }
 
-#[derive(Deserialize, Debug)]
-struct GatewayPayload<T>{
+#[derive(Debug)]
+struct GatewayPayload{
     pub op: i32, // Op-code
-    pub d: T, // Data message(unspecified format that is specified with op code) 
+    pub d: GatewayPayloadData, 
     pub s: i32, // Sequence number
     pub t: String,  // Event name
 }
 
+#[derive(Debug)]
+enum GatewayPayloadData {
+    Hello(HelloMsg),
+    _Empty,
+}
+
 // After gateway websocket connection is initiated a hello message is sent from server
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize,Debug)]
 struct HelloMsg{
     // Client should send a heartbeat to server every <heartbeat_interval> milliseconds
     heartbeat_interval: u64,
 }
 
-// TODO Fix deserialization for Gateway payload
-// Problem: opcode decides generic type of data mid deserialization
-// Idea: intermediate object that can be converted to real object, avoiding the subject
-// of mid deserialization. Saving data as raw string and in convertion method deserializes
-// to proper struct
-//impl<'de> Deserialize<'de> for GatewayPayload {
-//    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> 
-//        where D: Deserializer<'de>, {
-//        
-//    }
-//}
+// GatewayPayload contains both opcode and data where the format of data is dependant
+// of the opcode. This is the custom intermediate deserialization that first extracts
+// the data as raw json value and deserializes after exstracting the opcode
+impl<'de> Deserialize<'de> for GatewayPayload {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> 
+        where D: Deserializer<'de>, {
+            #[derive(Deserialize)]
+            struct Helper {
+                op: i32,
+                d: serde_json::Value,
+                s: i32,
+                t: String,
+            }
+
+            let helper = Helper::deserialize(deserializer)?;
+
+            fn deserialize_payload_data<'a,T>(val: serde_json::Value) -> T 
+                    where for<'de> T: serde::Deserialize<'de>{
+                serde_json::from_value(val).unwrap()
+            }
+
+            let data = match helper.op {
+                11 => GatewayPayloadData::Hello(deserialize_payload_data::<HelloMsg>(helper.d)),
+                _ => {
+                    panic!("Unknown discord gateway payload opcode");
+                },
+            };
+
+            Ok(GatewayPayload{
+                op: helper.op,
+                d: data,
+                s: helper.s,
+                t: helper.t,
+            })
+    }
+}
 
 
 fn send_get(client: &HttpClient, url: &Url) -> String {
@@ -131,6 +162,21 @@ fn gateway_eventloop_sync(
 
 pub fn initiate_gateway(client: &HttpClient) -> bool{
     let url = create_url(&format!("{}gateway/bot", API_BASE_URL));
+
+    let c = true;
+    if c {
+        let j = r#"{
+                 "op": 11,
+                 "d": {
+                   "heartbeat_interval": 45000
+                 },
+                 "s":42,
+                 "t":"Test-JSON"
+               }"#;
+        let c : GatewayPayload = serde_json::from_str(j).unwrap();
+        println!("{:?}", c);
+        return true;
+    }
 
     //TODO add explicit version and encoding parameters to request
     let body = send_get(client, &url);
