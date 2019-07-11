@@ -2,7 +2,7 @@ use std::{thread, time};
 
 use reqwest::{Client as HttpClient, Url};
 use super::API_BASE_URL;
-use serde::{Deserialize, Deserializer};
+use serde::{de, Deserialize, Deserializer};
 use websocket::{
     ClientBuilder as WsClientBuilder,
     client::sync::Client as WsClientSync,
@@ -56,7 +56,7 @@ struct HelloMsg{
 impl<'de> Deserialize<'de> for GatewayPayload {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> 
         where D: Deserializer<'de>, {
-            #[derive(Deserialize)]
+            #[derive(Deserialize, Debug)]
             struct Helper {
                 op: i32,
                 d: serde_json::Value,
@@ -66,24 +66,34 @@ impl<'de> Deserialize<'de> for GatewayPayload {
 
             let helper = Helper::deserialize(deserializer)?;
 
-            fn deserialize_payload_data<'a,T>(val: serde_json::Value) -> T 
+            fn deserialize_payload_data<'a,T>(val: serde_json::Value) -> Result<T, serde_json::Error> 
                     where for<'de> T: serde::Deserialize<'de>{
-                serde_json::from_value(val).unwrap()
+                serde_json::from_value(val)            
             }
 
             let data = match helper.op {
-                11 => GatewayPayloadData::Hello(deserialize_payload_data::<HelloMsg>(helper.d)),
+                11 => {
+                    match deserialize_payload_data::<HelloMsg>(helper.d) {
+                        Ok(m) => Ok(GatewayPayloadData::Hello(m)),
+                        Err(e) => Err(e),
+                    }
+                }
                 _ => {
                     panic!("Unknown discord gateway payload opcode");
                 },
             };
 
-            Ok(GatewayPayload{
-                op: helper.op,
-                d: data,
-                s: helper.s,
-                t: helper.t,
-            })
+            match data {
+                Ok(data) => {
+                    Ok(GatewayPayload{
+                        op: helper.op,
+                        d: data,
+                        s: helper.s,
+                        t: helper.t,
+                    })
+                },
+                Err(_) => Err(de::Error::custom("Could not deserialize gateway payload")),
+            }
     }
 }
 
