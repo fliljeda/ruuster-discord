@@ -2,7 +2,7 @@ use std::{thread, time};
 
 use reqwest::{Client as HttpClient, Url};
 use super::API_BASE_URL;
-use serde::{de, Deserialize, Deserializer};
+use serde::{de, Deserialize, Deserializer, Serialize};
 use websocket::{
     ClientBuilder as WsClientBuilder,
     client::sync::Client as WsClientSync,
@@ -37,14 +37,15 @@ struct GatewayPayload{
     pub t: String,  // Event name
 }
 
-#[derive(Debug)]
+#[derive(Serialize,Debug)]
+#[serde(untagged)]
 enum GatewayPayloadData {
     Hello(HelloMsg),
     _Empty,
 }
 
 // After gateway websocket connection is initiated a hello message is sent from server
-#[derive(Deserialize,Debug)]
+#[derive(Deserialize,Serialize,Debug)]
 struct HelloMsg{
     // Client should send a heartbeat to server every <heartbeat_interval> milliseconds
     heartbeat_interval: u64,
@@ -72,7 +73,7 @@ impl<'de> Deserialize<'de> for GatewayPayload {
             }
 
             let data = match helper.op {
-                11 => {
+                10 => {
                     match deserialize_payload_data::<HelloMsg>(helper.d) {
                         Ok(m) => Ok(GatewayPayloadData::Hello(m)),
                         Err(e) => Err(e),
@@ -165,6 +166,7 @@ fn gateway_eventloop_sync(
             },
             Ok(r) => r,
         };
+
         
         
     }
@@ -173,20 +175,6 @@ fn gateway_eventloop_sync(
 pub fn initiate_gateway(client: &HttpClient) -> bool{
     let url = create_url(&format!("{}gateway/bot", API_BASE_URL));
 
-    let c = true;
-    if c {
-        let j = r#"{
-                 "op": 11,
-                 "d": {
-                   "heartbeat_interval": 45000
-                 },
-                 "s":42,
-                 "t":"Test-JSON"
-               }"#;
-        let c : GatewayPayload = serde_json::from_str(j).unwrap();
-        println!("{:?}", c);
-        return true;
-    }
 
     //TODO add explicit version and encoding parameters to request
     let body = send_get(client, &url);
