@@ -4,14 +4,27 @@ use reqwest::{Client as HttpClient, Url};
 use super::API_BASE_URL;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use websocket::{
-    ClientBuilder as WsClientBuilder,
+    ClientBuilder,
     client::sync::Client as WsClientSync,
     stream::sync::{
-        TlsStream as WsTlsStream,
-        TcpStream as WsTcpStream,
+        TlsStream as WsTlsStreamSync,
+        TcpStream as WsTcpStreamSync,
     },
-    message as WsMessage,
+    client::r#async::{
+        Client,
+        ClientNew,
+        TlsStream,
+        TcpStream,
+    },
+    OwnedMessage::Text,
+    Message,
+    message,
+    futures::{Future, Stream, Sink},
+    //--------------------------------------------------------------//
 };
+use tokio::runtime::Builder;
+use tokio::runtime::Runtime;
+use tokio::prelude::Async::{Ready, NotReady};
 
 
 
@@ -121,9 +134,13 @@ fn deserialize<'a, T: Deserialize<'a>>(body: &'a str) -> T {
 }
 
 // Creates and initiates connection for the websocket to the specified url and
-// panics if it is unable to connect
-fn create_websocket(url: &Url) -> WsClientSync<WsTlsStream<WsTcpStream>> {
-    let ws_client = match WsClientBuilder::from_url(&url).connect_secure(None) {
+// panics if it is unable to connect. Sets version and encoding headers for the
+// connection
+fn create_websocket(url: &mut Url) -> WsClientSync<WsTlsStreamSync<WsTcpStreamSync>> {
+    url.set_query(Some("v=6&encoding=json"));
+    let mut ws_client = ClientBuilder::from_url(&url);
+    println!("Connecting to {}", url);
+    let ws_client = match ws_client.connect_secure(None) {
         Err(e) => {
             println!("Error: {}", e);
             panic!(format!("Could not connect websocket to {}", url));
@@ -152,35 +169,89 @@ fn thread_sleep(time_ms: u64){
 
 // Handles the custom blocking eventloop for a discord websocket gateway
 fn gateway_eventloop_sync(
-        client: &mut WsClientSync<WsTlsStream<WsTcpStream>>, 
+        client: &mut WsClientSync<WsTlsStreamSync<WsTcpStreamSync>>, 
         sleep_ms: u64
         ){
     loop {
         thread_sleep(sleep_ms);
+        println!("Loop");
 
         // Handle heartbeat   
-        let resp: WsMessage::OwnedMessage = match client.recv_message(){
+        let resp: message::OwnedMessage = match client.recv_message(){
             Err(e) => {
                 println!("Error with receiving message from websocket: {}", e);
                 continue;
             },
             Ok(r) => r,
         };
+        println!("{:?}",resp);
 
         
         
     }
 }
 
-pub fn initiate_gateway(client: &HttpClient) -> bool{
-    let url = create_url(&format!("{}gateway/bot", API_BASE_URL));
+fn create_websocket_async(url :&mut Url) -> ClientNew<TlsStream<TcpStream>>{
+    url.set_query(Some("v=6&encoding=json"));
+    // create a Future of a client
+    let client_future: ClientNew<TlsStream<TcpStream>> =
+        ClientBuilder::from_url(url)
+            .async_connect_secure(None);
+    client_future
+}
 
+fn setup_discord_gateway_async(gateway_url :&mut Url){
+    let client_future = create_websocket_async(gateway_url);
+    let heartbeat = client_future
+        .map(|(mut client, _)| {
+            loop {
+                let res = client.poll();
+                match res {
+                    Ok(Ready(x)) => {
+                        println!("Received message: {:?}", x);
+                        match x {
+                            Some(Text(msg)) => {
+                                println!("Heartbeat: {:?}", msg);
+                            },
+                            Some(_) => {println!("Non text heartbeat received")},
+                            None => {println!("Found None");},
+                        };
+                    },
+                    Ok(NotReady) => {
+                        let t: u64 = 500;
+                        println!("No hearbeat. Trying again in {} ms...", t);
+                        thread_sleep(t);
+                        continue;
+                    },
+                    Err(_) => {continue;},
+                };
+            }
+        });
+
+    let mut runtime = Builder::new().build().unwrap();
+    let res = runtime.block_on(heartbeat);
+    println!("Res {:?}", res);
+}
+
+pub fn initiate_gateway(client: &HttpClient) -> bool{
+    let gateway_url = create_url(&format!("{}gateway/bot", API_BASE_URL));
+    let body = send_get(client, &gateway_url);
+    let v : GatewayResponse = deserialize(&body);
+    let mut gateway_url = create_url(&v.url);
+
+    ///////////////  ASYNC   ////////////////////////////////////
+    setup_discord_gateway_async(&mut gateway_url);
+
+    let a = true;
+    if a {
+        return true;
+    }
+
+    //////////////////////////////////////////////////////////////
 
     //TODO add explicit version and encoding parameters to request
-    let body = send_get(client, &url);
 
-    let v : GatewayResponse = deserialize(&body);
-    let mut ws = create_websocket(&create_url(&v.url));
+    let mut ws = create_websocket(&mut create_url(&v.url));
     gateway_eventloop_sync(&mut ws, 500);
     
     println!("----\n{:?}\n------", v);
