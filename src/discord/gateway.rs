@@ -27,7 +27,6 @@ use tokio::runtime::Runtime;
 use tokio::prelude::Async::{Ready, NotReady};
 
 
-
 #[derive(Deserialize,Debug)]
 struct GatewayResponse {
     pub url: String,
@@ -185,9 +184,6 @@ fn gateway_eventloop_sync(
             Ok(r) => r,
         };
         println!("{:?}",resp);
-
-        
-        
     }
 }
 
@@ -200,37 +196,85 @@ fn create_websocket_async(url :&mut Url) -> ClientNew<TlsStream<TcpStream>>{
     client_future
 }
 
+// Hello message containing the heartbeat interval that should be used
+// This function extracts that value and returns it
+fn handle_message_hello(payload :&GatewayPayload, client: &mut Client<TlsStream<TcpStream>>)
+    -> Option<u64> {
+    let data = match &payload.d {
+        GatewayPayloadData::Hello(msg) => msg,
+        _ => {
+            println!("Unexpected data type in payload: {:?}", payload);
+            return None;
+        },
+    };
+
+    let heartbeat_interval = data.heartbeat_interval;
+    Some(heartbeat_interval)
+}
+
+fn handle_message_text(client: &mut Client<TlsStream<TcpStream>>, message :&str){
+    let payload: GatewayPayload = deserialize(message);
+    match payload.op {
+        10 => {
+            match handle_message_hello(&payload, client) {
+                Some(heartbeat_interval) => {
+                    println!("Heartbeat_interval: {}", heartbeat_interval);
+                },
+                None => {},
+            };
+        },
+        unhandled_code => {
+            println!("Unhandled opcode in gateway message: {:?}", unhandled_code);
+        },
+    };
+}
+
+fn poll_messages(client: &mut Client<TlsStream<TcpStream>>){
+    //If error occurs too many times then panic
+    let mut errors = 0; 
+    let errors_max = 5;
+    loop {
+        let res = client.poll();
+        match res {
+            Ok(Ready(x)) => {
+                match x {
+                    Some(Text(msg)) => {
+                        handle_message_text(client, &msg);
+                    },
+                    Some(_) => {println!("Non text heartbeat received")},
+                    None => {println!("Found none when gateway message should be ready");},
+                };
+            },
+            Ok(NotReady) => {
+                break;
+            },
+            Err(e) => {
+                errors += 1;
+                println!("An error occurred: {:?}", e);
+                if errors >= errors_max {
+                    panic!("Too many errors when polling messages.. last known error: {:?}", e);
+                }else{
+                    continue;
+                }
+            },
+        };
+    }
+}
+
 fn setup_discord_gateway_async(gateway_url :&mut Url){
     let client_future = create_websocket_async(gateway_url);
-    let heartbeat = client_future
-        .map(|(mut client, _)| {
-            loop {
-                let res = client.poll();
-                match res {
-                    Ok(Ready(x)) => {
-                        println!("Received message: {:?}", x);
-                        match x {
-                            Some(Text(msg)) => {
-                                println!("Heartbeat: {:?}", msg);
-                            },
-                            Some(_) => {println!("Non text heartbeat received")},
-                            None => {println!("Found None");},
-                        };
-                    },
-                    Ok(NotReady) => {
-                        let t: u64 = 500;
-                        println!("No hearbeat. Trying again in {} ms...", t);
-                        thread_sleep(t);
-                        continue;
-                    },
-                    Err(_) => {continue;},
-                };
-            }
-        });
+    let gateway_message_handler = client_future.map(|(mut client,_)| { 
+        loop {
+            let time: u64 = 500;
+            println!("Sleeping for {} ms to try to poll for messages", time);
+            thread_sleep(time);
+            poll_messages(&mut client);
+        }
+    });
 
     let mut runtime = Builder::new().build().unwrap();
-    let res = runtime.block_on(heartbeat);
-    println!("Res {:?}", res);
+    let res = runtime.block_on(gateway_message_handler);
+    //println!("Res {:?}", res);
 }
 
 pub fn initiate_gateway(client: &HttpClient) -> bool{
