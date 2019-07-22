@@ -26,7 +26,6 @@ use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
 use tokio::prelude::Async::{Ready, NotReady};
 
-
 #[derive(Deserialize,Debug)]
 struct GatewayResponse {
     pub url: String,
@@ -45,8 +44,8 @@ struct GatewaySessionStartLimit {
 struct GatewayPayload{
     pub op: i32, // Op-code
     pub d: GatewayPayloadData, 
-    pub s: i32, // Sequence number
-    pub t: String,  // Event name
+    pub s: Option<i32>, // Sequence number
+    pub t: Option<String>,  // Event name
 }
 
 #[derive(Serialize,Debug)]
@@ -73,8 +72,8 @@ impl<'de> Deserialize<'de> for GatewayPayload {
             struct Helper {
                 op: i32,
                 d: serde_json::Value,
-                s: i32,
-                t: String,
+                s: Option<i32>,
+                t: Option<String>,
             }
 
             let helper = Helper::deserialize(deserializer)?;
@@ -241,7 +240,7 @@ fn poll_messages(client: &mut Client<TlsStream<TcpStream>>){
                     Some(Text(msg)) => {
                         handle_message_text(client, &msg);
                     },
-                    Some(_) => {println!("Non text heartbeat received")},
+                    Some(_) => {println!("Non text gateway message received")},
                     None => {println!("Found none when gateway message should be ready");},
                 };
             },
